@@ -63,6 +63,15 @@ export class CdkConfigdeployStack extends cdk.Stack {
 
     console.log("machineImage:", machineImage);
     const handle = new ec2.InitServiceRestartHandle();
+    // 👇 load user data script
+    const userDataScript = this.readFileAndSplitSync('./config/base-init.sh');
+    const commandsUserData = ec2.UserData.forLinux();
+    commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
+    // userDataScript.forEach(item => {
+    //   commandsUserData.addCommands(item);  
+    // });
+    
+   
 
     const instance = new ec2.Instance(this, 'bation-host', {
       vpc: this.vpc,
@@ -74,63 +83,69 @@ export class CdkConfigdeployStack extends cdk.Stack {
       keyName: keyPairName,
       // keyPair: props.keyPair, -> Bug: no KeyName in generated template
       securityGroup: this.bationHostSecurityGroup,
+      userData: commandsUserData,
       userDataCausesReplacement: false,
       init: ec2.CloudFormationInit.fromConfigSets({
         configSets: {
           default: ['setupCfnHup',
             'installNprobe',
             'configNprobe',
-            'testCfnHup'
+            'restartNprobe'
           ],
+          Update: [
+            'configNprobe',
+            'restartNprobe',
+            'testCfnHup'
+        ]
         },
         configs: {
           setupCfnHup: new ec2.InitConfig([
             ec2.InitFile.fromString('/etc/cfn/cfn-hup.conf',
-              `[main]
-                 stack=${cdk.Stack.of(this).stackName}
-                 region=${cdk.Stack.of(this).region}
-                 interval=2
-                 verbose=true
-                `              ,
+`[main]
+stack=${cdk.Stack.of(this).stackName}
+region=${cdk.Stack.of(this).region}
+interval=1
+verbose=true
+`              ,
               { serviceRestartHandles: [handle] }
             ),
             ec2.InitFile.fromString('/etc/cfn/hooks.d/cfn-auto-reloader.conf',
-  
-              `[cfn-auto-reloader-hook]
-                 triggers=post.update
-                 path=Resources.Ec2Instance.Metadata.AWS::CloudFormation::Init
-                 action=/opt/aws/bin/cfn-init -v
-                 --stack ${cdk.Stack.of(this).stackName}
-                 --resource Ec2Instance
-                 --region ${cdk.Stack.of(this).region}
-                 --configsets Update
+
+              ` Content will be updated later
                 `
               ,
               { serviceRestartHandles: [handle] }
             ),
-            ec2.InitService.enable('cfn-hup', {
-              enabled: true,
-              ensureRunning: true,
-              serviceRestartHandle: handle
-            })
+            ec2.InitFile.fromString('/etc/systemd/system/cfn-hup.service',
+`[Unit]
+Description=cfn-hup daemon
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cfn-hup
+Restart=always
+[Install]
+WantedBy=multi-user.target`,
+            { serviceRestartHandles: [handle] }
+            ),
+            ec2.InitCommand.shellCommand('systemctl enable cfn-hup.service'),
+            ec2.InitCommand.shellCommand('systemctl start cfn-hup.service')
           ]),
           installNprobe: new ec2.InitConfig([
-            ec2.InitFile.fromFileInline('/tmp/nprobe-init.sh', './config/nprobe/nprobe-init.sh'),
-            ec2.InitCommand.shellCommand('chmod + /tmp/nprobe-init.sh'),
-            ec2.InitCommand.shellCommand('/tmp/nprobe-init.sh'),
-            ec2.InitService.enable('nprobe', {
-              enabled: true,
-              ensureRunning: true,
-              serviceRestartHandle: handle
-            })
+            ec2.InitFile.fromString('/tmp/nprobe-init.sh', this.readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n')),
+            ec2.InitCommand.shellCommand('chmod +x /tmp/nprobe-init.sh'),
+            ec2.InitCommand.shellCommand('/tmp/nprobe-init.sh'),            
           ]),
           configNprobe: new ec2.InitConfig([
-            ec2.InitFile.fromFileInline(
+            ec2.InitFile.fromString(
               '/etc/nprobe.conf',
-              './config/nprobe/nprobe.conf',
+              this.readFileAndSplitSync('./config/nprobe/nprobe.conf').join('\n'),
               { serviceRestartHandles: [handle] }
             ),
-  
+
+          ]),
+          restartNprobe: new ec2.InitConfig([
+            ec2.InitCommand.shellCommand('systemctl enable nprobe.service'),
+            ec2.InitCommand.shellCommand('systemctl restart nprobe.service')
           ]),
           testCfnHup: new ec2.InitConfig([
             ec2.InitCommand.shellCommand('echo "+*+*+*+CFN-HUP+*+*+*+Working Well++++++"'),
@@ -143,124 +158,38 @@ export class CdkConfigdeployStack extends cdk.Stack {
       },
     })
 
-    const cnfInit = ec2.CloudFormationInit.fromConfigSets({
-      configSets: {
-        default: ['setupCfnHup',
-          'installNprobe',
-          'configNprobe',
-          'testCfnHup'
-        ],
-      },
-      configs: {
-        setupCfnHup: new ec2.InitConfig([
-          ec2.InitFile.fromString('/etc/cfn/cfn-hup.conf',
-            `[main]
-               stack=${cdk.Stack.of(this).stackName}
-               region=${cdk.Stack.of(this).region}
-               interval=2
-               verbose=true
-              `              ,
-            { serviceRestartHandles: [handle] }
-          ),
-          ec2.InitFile.fromString('/etc/cfn/hooks.d/cfn-auto-reloader.conf',
-
-            `[cfn-auto-reloader-hook]
-               triggers=post.update
-               path=Resources.${instance.instance.logicalId}.Metadata.AWS::CloudFormation::Init
-               action=/opt/aws/bin/cfn-init -v
-               --stack ${cdk.Stack.of(this).stackName}
-               --resource ${instance.instance.logicalId}
-               --region ${cdk.Stack.of(this).region}
-               --configsets Update
-              `
-            ,
-            { serviceRestartHandles: [handle] }
-          ),
-          ec2.InitService.enable('cfn-hup', {
-            enabled: true,
-            ensureRunning: true,
-            serviceRestartHandle: handle
-          })
-        ]),
-        installNprobe: new ec2.InitConfig([
-          ec2.InitFile.fromFileInline('/tmp/nprobe-init.sh', './config/nprobe/nprobe-init.sh'),
-          ec2.InitCommand.shellCommand('chmod + /tmp/nprobe-init.sh'),
-          ec2.InitCommand.shellCommand('/tmp/nprobe-init.sh'),
-          ec2.InitService.enable('nprobe', {
-            enabled: true,
-            ensureRunning: true,
-            serviceRestartHandle: handle
-          })
-        ]),
-        configNprobe: new ec2.InitConfig([
-          ec2.InitFile.fromFileInline(
-            '/etc/nprobe.conf',
-            './config/nprobe/nprobe.conf',
-            { serviceRestartHandles: [handle] }
-          ),
-
-        ]),
-        testCfnHup: new ec2.InitConfig([
-          ec2.InitCommand.shellCommand('echo "+*+*+*+CFN-HUP+*+*+*+Working Well++++++"'),
-        ]),
-      },
-    })
-
-
 
     console.log('Instance logical ID:', instance.instance.logicalId)
-    
+
     // Workaround to overrid instance logical ID in CloudFormation Init
     // https://github.com/aws/aws-cdk/issues/14855
-    const cfnHubReload = 
-    `[cfn-auto-reloader-hook]
-               triggers=post.update
-               path=Resources.${instance.instance.logicalId}.Metadata.AWS::CloudFormation::Init
-               action=/opt/aws/bin/cfn-init -v
-               --stack ${cdk.Stack.of(this).stackName}
-               --resource ${instance.instance.logicalId}
-               --region ${cdk.Stack.of(this).region}
-               --configsets Update
-              `
+    const cfnHubReload =
+`[cfn-auto-reloader-hook]
+  triggers=post.update
+  path=Resources.${instance.instance.logicalId}.Metadata.AWS::CloudFormation::Init
+  action=/usr/local/bin/cfn-init -v
+  --stack ${cdk.Stack.of(this).stackName}
+  --resource ${instance.instance.logicalId}
+  --region ${cdk.Stack.of(this).region}
+  --configsets Update
+`
     instance.instance.addOverride('Metadata.AWS::CloudFormation::Init.setupCfnHup.files./etc/cfn/hooks\\.d/cfn-auto-reloader\\.conf.content',
-    cfnHubReload)          
+      cfnHubReload)
 
-    // cnfInit.attach(instance.instance, {
-    //   instanceRole: instance.role,
-    //   platform: ec2.OperatingSystemType.LINUX,
-    //   userData: instance.userData,
-    // })
-
-
-
-
-    // 👇 load user data script
-    const userDataScript = readFileSync('./config/base-init.sh', 'utf8');
+   
     // Install neccessary tool
-    instance.addUserData(userDataScript);
-    // init Cloudformation helper
-    // const cnfInitCommand = `
-    // /usr/local/bin/cfn-init -v
-    //   --stack ${cdk.Stack.of(this).stackName}
-    //   --resource ${instance.instance.logicalId}
-    //   --configsets default
-    //   --region ${cdk.Stack.of(this).region}
-    // `
-
-    // const cnfSignalCommand = `
-    // /usr/local/bin/cfn-signal -e $? 
-    //   --stack ${cdk.Stack.of(this).stackName}
-    //   --resource ${instance.instance.logicalId}
-    //   --region ${cdk.Stack.of(this).region}
-    // `
-    // instance.userData.addCommands(cnfInitCommand)
-    // instance.userData.addCommands(cnfSignalCommand)
-
+    // instance.addUserData(userDataScript);
     // Add the policy to access EC2 without SSH
     instance.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     )
 
+  }
+  
+  readFileAndSplitSync(filePath: string): string[] {
+      const fileContents = readFileSync(filePath, 'utf-8');
+      const lines = fileContents.split(/\r?\n/);
+      return lines;
   }
 
 }

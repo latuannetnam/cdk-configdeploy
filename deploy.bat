@@ -1,1 +1,1 @@
-cdk deploy -c profile=netnamaws --profile netnamaws
+cdk deploy -c profile=netnamaws --profile netnamaws -v -v -v
