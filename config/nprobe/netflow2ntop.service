@@ -1,0 +1,14 @@
+[Unit]
+Description=Collect Netflow and export to NtopNG
+After=multi-user.target
+StartLimitIntervalSec=500
+StartLimitBurst=5
+
+[Service]
+ExecStart=/opt/netflow2ng/dist/netflow2ng-0.0.5 --listen="0.0.0.0:2060"  --listen-zmq="tcp://*:5560"
+Type=simple
+Restart=on-failure
+RestartSec=15s
+
+[Install]
+WantedBy=multi-user.target
