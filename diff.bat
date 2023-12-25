@@ -1,0 +1,1 @@
+cdk diff -c profile=netnamaws --profile netnamaws
