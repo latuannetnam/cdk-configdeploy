@@ -64,9 +64,10 @@ export class CdkConfigdeployStack extends cdk.Stack {
     console.log("machineImage:", machineImage);
     const handle = new ec2.InitServiceRestartHandle();
     // 👇 load user data script
-    const userDataScript = this.readFileAndSplitSync('./config/base-init.sh');
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
+    commandsUserData.addCommands(this.readFileAndSplitSync('./config/nprobe/ntop-preinstall.sh').join('\n'));
+    commandsUserData.addCommands(this.readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n'));
     // userDataScript.forEach(item => {
     //   commandsUserData.addCommands(item);  
     // });
@@ -88,7 +89,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
       init: ec2.CloudFormationInit.fromConfigSets({
         configSets: {
           default: ['setupCfnHup',
-            'installNprobe',
+            // 'installNprobe',
             'configNprobe',
             'restartNprobe'
           ],
@@ -131,6 +132,8 @@ WantedBy=multi-user.target`,
             ec2.InitCommand.shellCommand('systemctl start cfn-hup.service')
           ]),
           installNprobe: new ec2.InitConfig([
+            ec2.InitCommand.shellCommand('echo $HOME'),
+            ec2.InitCommand.shellCommand('echo ~/'),
             ec2.InitFile.fromString('/tmp/nprobe-init.sh', this.readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n')),
             ec2.InitCommand.shellCommand('chmod +x /tmp/nprobe-init.sh'),
             ec2.InitCommand.shellCommand('/tmp/nprobe-init.sh', {cwd: '/tmp'}),
