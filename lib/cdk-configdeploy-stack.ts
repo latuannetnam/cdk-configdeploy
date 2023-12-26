@@ -133,13 +133,12 @@ WantedBy=multi-user.target`,
           installNprobe: new ec2.InitConfig([
             ec2.InitFile.fromString('/tmp/nprobe-init.sh', this.readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n')),
             ec2.InitCommand.shellCommand('chmod +x /tmp/nprobe-init.sh'),
-            ec2.InitCommand.shellCommand('/tmp/nprobe-init.sh'),            
+            ec2.InitCommand.shellCommand('/tmp/nprobe-init.sh', {cwd: '/tmp'}),
           ]),
           configNprobe: new ec2.InitConfig([
             ec2.InitFile.fromString(
-              '/etc/nprobe.conf',
-              this.readFileAndSplitSync('./config/nprobe/nprobe.conf').join('\n'),
-              { serviceRestartHandles: [handle] }
+              '/etc/nprobe/nprobe.conf',
+              this.readFileAndSplitSync('./config/nprobe/nprobe.conf').join('\n')
             ),
 
           ]),
@@ -165,13 +164,9 @@ WantedBy=multi-user.target`,
     // https://github.com/aws/aws-cdk/issues/14855
     const cfnHubReload =
 `[cfn-auto-reloader-hook]
-  triggers=post.update
-  path=Resources.${instance.instance.logicalId}.Metadata.AWS::CloudFormation::Init
-  action=/usr/local/bin/cfn-init -v
-  --stack ${cdk.Stack.of(this).stackName}
-  --resource ${instance.instance.logicalId}
-  --region ${cdk.Stack.of(this).region}
-  --configsets Update
+ triggers=post.update
+ path=Resources.${instance.instance.logicalId}.Metadata.AWS::CloudFormation::Init
+ action=/usr/local/bin/cfn-init -v --stack ${cdk.Stack.of(this).stackName} --resource ${instance.instance.logicalId} --region ${cdk.Stack.of(this).region}  --configsets Update
 `
     instance.instance.addOverride('Metadata.AWS::CloudFormation::Init.setupCfnHup.files./etc/cfn/hooks\\.d/cfn-auto-reloader\\.conf.content',
       cfnHubReload)
