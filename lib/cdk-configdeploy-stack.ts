@@ -9,6 +9,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
   // Properties
   vpc: ec2.Vpc
   bationHostSecurityGroup: ec2.SecurityGroup
+  keyPairName: string
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -34,17 +35,14 @@ export class CdkConfigdeployStack extends cdk.Stack {
       ],
     })
 
-    //  Create key-pair for SSH
-    const keyPairName = process.env.KEY_PAIR!
-    const cfnKeyPair = new ec2.CfnKeyPair(this, keyPairName, {
-      keyName: keyPairName,
+    this.keyPairName = process.env.KEY_PAIR!
+    const cfnKeyPair = new ec2.CfnKeyPair(this, this.keyPairName, {
+      keyName: this.keyPairName,
       tags: [{
         key: 'sshKey',
-        value: keyPairName,
+        value: this.keyPairName,
       }],
     });
-
-    const keyPair = ec2.KeyPair.fromKeyPairName(this, 'codedeploy-ssh-keypair', keyPairName)
 
     // Create bastion-host security group
     this.bationHostSecurityGroup = new ec2.SecurityGroup(this, 'public-host-sg', {
@@ -55,6 +53,19 @@ export class CdkConfigdeployStack extends cdk.Stack {
 
     this.bationHostSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow Internet to SSH to bastion host')
 
+    // this.createInstance(props)
+
+  }
+  
+  readFileAndSplitSync(filePath: string): string[] {
+      const fileContents = readFileSync(filePath, 'utf-8');
+      const lines = fileContents.split(/\r?\n/);
+      return lines;
+  }
+
+  createInstance(props?: cdk.StackProps) {
+    //  Create key-pair for SSH
+    const keyPair = ec2.KeyPair.fromKeyPairName(this, 'codedeploy-ssh-keypair', this.keyPairName)
     // Create bastion host
     const machineImage = ec2.MachineImage.lookup({
       name: 'ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207',
@@ -65,6 +76,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
     const handle = new ec2.InitServiceRestartHandle();
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
+    commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
     commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
     commandsUserData.addCommands(this.readFileAndSplitSync('./config/nprobe/ntop-preinstall.sh').join('\n'));
     commandsUserData.addCommands(this.readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n'));
@@ -81,7 +93,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
       machineImage: machineImage,
       availabilityZone: this.vpc.availabilityZones[0],
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      keyName: keyPairName,
+      keyName: this.keyPairName,
       // keyPair: props.keyPair, -> Bug: no KeyName in generated template
       securityGroup: this.bationHostSecurityGroup,
       userData: commandsUserData,
@@ -182,12 +194,6 @@ WantedBy=multi-user.target`,
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     )
 
-  }
-  
-  readFileAndSplitSync(filePath: string): string[] {
-      const fileContents = readFileSync(filePath, 'utf-8');
-      const lines = fileContents.split(/\r?\n/);
-      return lines;
   }
 
 }

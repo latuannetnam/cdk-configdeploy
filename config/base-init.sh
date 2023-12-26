@@ -1,4 +1,9 @@
 # Start basic installation
+# Fix time zone
+systemctl enable systemd-timedated
+systemctl start systemd-timedated
+timedatectl set-ntp true
+# Update packages and install basic tools
 apt-get update -y
 apt-get -y install  mc htop wget curl net-tools nload nano git
 # Install AWS CLI

@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
+import * as region_info from '@aws-cdk/region-info';
 import { CdkConfigdeployStack } from '../lib/cdk-configdeploy-stack';
+
 import * as dotenv from 'dotenv';
 
 const app = new cdk.App();
 // Load variable from .env file
 const profile = app.node.tryGetContext('profile');
 dotenv.config({ path: profile ? `.env.${profile}` : undefined });
+const regionInfo = region_info.RegionInfo.get('name');
 
+console.log('Region Info:', regionInfo);
 new CdkConfigdeployStack(app, process.env.STACK_NAME!, {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
