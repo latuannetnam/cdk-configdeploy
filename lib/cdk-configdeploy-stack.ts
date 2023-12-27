@@ -64,8 +64,9 @@ export class CdkConfigdeployStack extends cdk.Stack {
 
     console.log("machineImage:", this.machineImage);
 
-    this.createInstanceSimple(props)
+    // const instance = this.createInstanceCodeDeploy(props)
     // this.createInstance(props)
+    // this.createCodeDeploy(props, instance)
 
   }
 
@@ -75,7 +76,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
     return lines;
   }
 
-  createInstanceSimple(props?: cdk.StackProps) {
+  createInstanceCodeDeploy(props?: cdk.StackProps) {
 
     // Create bastion host
     const handle = new ec2.InitServiceRestartHandle();
@@ -83,6 +84,16 @@ export class CdkConfigdeployStack extends cdk.Stack {
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
     commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
+    commandsUserData.addCommands(
+      `# Install CodeDeploy agent      
+apt install -y ruby-full
+cd /root
+wget https://aws-codedeploy-${cdk.Stack.of(this).region}.s3.${cdk.Stack.of(this).region}.amazonaws.com/latest/install
+chmod +x ./install
+./install auto
+systemctl status codedeploy-agent
+`
+    )
     const instance = new ec2.Instance(this, 'bation-host-simple', {
       vpc: this.vpc,
       instanceName: 'bation-host-simple',
@@ -100,7 +111,9 @@ export class CdkConfigdeployStack extends cdk.Stack {
     // Add tags to instance
     cdk.Tags.of(instance).add('group', 'bation-host')
     
-
+    const instanceId = instance.instanceId;
+    // Install CodeDeploy agent
+    // instance.userData.addCommands(`aws ssm send-command --region ${cdk.Stack.of(this).region} --document-name "AWS-ConfigureAWSPackage --instance-ids "${instanceId}" --parameters '{"action":["Install"],"installationType":["In-place update"],"name":["AWSCodeDeployAgent"]}`);
 
     console.log('Instance logical ID:', instance.instance.logicalId)
 
@@ -108,10 +121,34 @@ export class CdkConfigdeployStack extends cdk.Stack {
     instance.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     )
+    // Add the policy to access CodeDeploy
+    instance.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonEC2RoleforAWSCodeDeploy")
+    );
+
+    // Allow SSM to install CodeDeployAgent
+    // Error: Circular dependency between resources
+    const instanceArn = `arn:aws:ec2:${cdk.Stack.of(this).region}:${cdk.Aws.ACCOUNT_ID}:instance/${instanceId}`;  
+    const ssmDocumentArn = `arn:aws:ssm:${cdk.Stack.of(this).region}::document/AWS-ConfigureAWSPackage`
+    console.log("instanceArn:", instanceArn)
+    // instance.role.attachInlinePolicy(new iam.Policy(this, 'SendCommandPolicy', {
+    //   policyName: 'SendCommandPolicy',
+    //   statements: [new iam.PolicyStatement({
+    //     // resources: [instanceArn, ssmDocumentArn],
+    //     resources:[''],
+    //     actions: [
+    //       'ssm:SendCommand',
+    //     ]
+    //   })
+    //   ]
+    // }))
+
+    return instance
+
 
   }
 
-  createInstance(props?: cdk.StackProps) {
+  createInstanceCloudFormationInit(props?: cdk.StackProps) {
 
     // Create bastion host
     const handle = new ec2.InitServiceRestartHandle();
@@ -203,7 +240,7 @@ verbose=true
 
   }
 
-  createInstance2(props?: cdk.StackProps) {
+  createInstanceCloudFormationInit2(props?: cdk.StackProps) {
 
     // Create bastion host
     const handle = new ec2.InitServiceRestartHandle();
@@ -323,8 +360,41 @@ WantedBy=multi-user.target`,
     )
   }
 
-  createCodeDeploy(props: cdk.StackProps) {
+  createCodeDeploy(props?: cdk.StackProps, instance?: ec2.Instance) {
+    const application = new codedeploy.ServerApplication(this, 'CodeDeployApplication', {
+      applicationName: 'MyApplication', // optional property
+    });
+    const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'CodeDeployDeploymentGroup', {
+      application,
+      deploymentGroupName: 'MyDeploymentGroup',
+      deploymentConfig: codedeploy.ServerDeploymentConfig.ONE_AT_A_TIME,
+      // adds User Data that installs the CodeDeploy agent on your auto-scaling groups hosts
+      // default: true
+      // installAgent: true,
+      // adds EC2 instances matching tags
+      ec2InstanceTags: new codedeploy.InstanceTagSet(
+        {
+          // any instance with tags satisfying
+          // key1=v1 or key1=v2 or key2 (any value) or value v3 (any key)
+          // will match this group
+          'group': ['bation-host'],
+        },
+      ),
+      // CloudWatch alarms
+      // alarms: [alarm],
+      // whether to ignore failure to fetch the status of alarms from CloudWatch
+      // default: false
+      // ignorePollAlarmsFailure: false,
+      // auto-rollback configuration
+      autoRollback: {
+        failedDeployment: true, // default: true
+        stoppedDeployment: true, // default: false
+        // deploymentInAlarm: true, // default: true if you provided any alarms, false otherwise
+      },
+    });
 
+    deploymentGroup.node.addDependency(instance!)
+    
   }
 
 
