@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as path from 'path';
 import { readFileSync } from 'fs';
 
@@ -95,6 +96,10 @@ export class CdkConfigdeployStack extends cdk.Stack {
       userData: commandsUserData,
       userDataCausesReplacement: false,
     })
+
+    // Add tags to instance
+    cdk.Tags.of(instance).add('group', 'bation-host')
+    
 
 
     console.log('Instance logical ID:', instance.instance.logicalId)
@@ -316,6 +321,9 @@ WantedBy=multi-user.target`,
     instance.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     )
+  }
+
+  createCodeDeploy(props: cdk.StackProps) {
 
   }
 
