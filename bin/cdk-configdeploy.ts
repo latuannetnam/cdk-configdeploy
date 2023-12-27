@@ -10,9 +10,11 @@ const app = new cdk.App();
 // Load variable from .env file
 const profile = app.node.tryGetContext('profile');
 dotenv.config({ path: profile ? `.env.${profile}` : undefined });
-const regionInfo = region_info.RegionInfo.get('name');
+// const regionInfo = region_info.RegionInfo.get('name');
 
-console.log('Region Info:', regionInfo);
+// console.log('Region Info:', regionInfo);
+console.log('Account:', process.env.CDK_DEFAULT_ACCOUNT);
+console.log('Region', process.env.CDK_DEFAULT_REGION);
 new CdkConfigdeployStack(app, process.env.STACK_NAME!, {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
@@ -21,6 +23,7 @@ new CdkConfigdeployStack(app, process.env.STACK_NAME!, {
   /* Uncomment the next line to specialize this stack for the AWS Account
    * and Region that are implied by the current CLI configuration. */
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+  terminationProtection: true,
 
   /* Uncomment the next line if you know exactly what Account and Region you
    * want to deploy the stack to. */

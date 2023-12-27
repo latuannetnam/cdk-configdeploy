@@ -1,5 +1,5 @@
 # Start basic installation
-# Fix time zone
+# Enable time sync
 systemctl enable systemd-timedated
 systemctl start systemd-timedated
 timedatectl set-ntp true
@@ -13,4 +13,4 @@ apt-get -y install python3-pip
 pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
 mkdir -p /opt/aws/
 ln -s /usr/local/bin /opt/aws/bin
-# ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
+
