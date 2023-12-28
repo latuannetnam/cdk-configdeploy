@@ -64,8 +64,8 @@ export class CdkConfigdeployStack extends cdk.Stack {
 
     console.log("machineImage:", this.machineImage);
 
-    // this.createBationHost(props)
-    const instance = this.createEC2Instance(props)
+    this.createBationHost(props)
+    // const instance = this.createEC2Instance(props)
     // const instance = this.createInstanceCloudFormationInit(props)
     // const instance = this.createInstanceCodeDeploy(props)
     // this.createCodeDeploy(props, instance)
