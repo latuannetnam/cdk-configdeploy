@@ -3,10 +3,9 @@ import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-import * as path from 'path';
-import { readFileSync, readdirSync, statSync } from 'fs';
-import { dir } from 'console';
+import { readFileAndSplitSync, getSortedFilesInDirectory } from './common'
 
+import { EC2InstanceExt } from './ec2-instance-ext'
 export class CdkConfigdeployStack extends cdk.Stack {
   // Properties
   vpc: ec2.Vpc
@@ -65,29 +64,52 @@ export class CdkConfigdeployStack extends cdk.Stack {
 
     console.log("machineImage:", this.machineImage);
 
-    this.createBationHost(props)
+    // this.createBationHost(props)
+    const instance = this.createEC2Instance(props)
     // const instance = this.createInstanceCloudFormationInit(props)
     // const instance = this.createInstanceCodeDeploy(props)
     // this.createCodeDeploy(props, instance)
 
   }
 
-  readFileAndSplitSync(filePath: string): string[] {
-    const fileContents = readFileSync(filePath, 'utf-8');
-    const lines = fileContents.split(/\r?\n/);
-    return lines;
-  }
 
-  getSortedFilesInDirectory(directory: string): string[] {
-    // Synchronously read the directory
-    let files = readdirSync(directory);
 
-    // Filter out directories and sort the files
-    files = files.filter(file => {
-      return statSync(path.join(directory, file)).isFile();
-    }).sort();
+  createEC2Instance(props?: cdk.StackProps) {
+    //  Setup softwares
+    const dirPath = './config/nprobe'
+    const scripts = getSortedFilesInDirectory(`${dirPath}/scripts`);
+    const initSoftwareElement: ec2.InitElement[] = [];
+    scripts.forEach(scriptFile => {
+      const remoteScript = `/tmp/${scriptFile}`
+      initSoftwareElement.push(ec2.InitFile.fromString(remoteScript, readFileAndSplitSync(`${dirPath}/scripts/${scriptFile}`).join('\n')));
+      initSoftwareElement.push(ec2.InitCommand.shellCommand(`chmod +x ${remoteScript}`))
+      initSoftwareElement.push(ec2.InitCommand.shellCommand(remoteScript, { cwd: '/tmp' }))
+    })
+    const setupSoftwares = new ec2.InitConfig(initSoftwareElement)
 
-    return files;
+    // Setup config
+    const updateConfigs = new ec2.InitConfig([
+      // Update nprobe config
+      ec2.InitFile.fromString(
+        `/etc/nprobe/nprobe.conf`,
+        readFileAndSplitSync(`${dirPath}/nprobe.conf`).join('\n'),
+      ),
+      ec2.InitCommand.shellCommand('systemctl restart nprobe.service')
+    ])
+    const instance = new EC2InstanceExt(this, 'ec2-instance', {
+      region: this.region,
+      vpc: this.vpc,
+      // instanceName: 'bation-host',
+      instanceType: new ec2.InstanceType('t3.micro'),
+      machineImage: this.machineImage,
+      availabilityZone: this.vpc.availabilityZones[0],
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      keyName: this.keyPairName,
+      // keyPair: keyPair, Bug: no KeyName in generated template
+      securityGroup: this.bationHostSecurityGroup,
+      setupSoftwares: setupSoftwares,
+      updateConfigs: updateConfigs,
+    })
   }
 
   createBationHost(props?: cdk.StackProps) {
@@ -102,7 +124,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
-    commandsUserData.addCommands(this.readFileAndSplitSync('./config/bation-host/bation-host-init.sh').join('\n'));
+    commandsUserData.addCommands(readFileAndSplitSync('./config/bation-host/bation-host-init.sh').join('\n'));
 
 
 
@@ -124,7 +146,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
     console.log('Instance logical ID:', instance.instance.logicalId)
     // Add tags to instance
     cdk.Tags.of(instance).add('group', 'bation-host')
-    
+
     // Add the policy to access EC2 without SSH
     instance.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
@@ -140,7 +162,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
-    commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
+    commandsUserData.addCommands(readFileAndSplitSync('./config/base-init.sh').join('\n'));
     // Install codedeploy
     commandsUserData.addCommands(
       `# Install CodeDeploy agent      
@@ -214,15 +236,15 @@ systemctl status codedeploy-agent
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
-    commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
+    commandsUserData.addCommands(readFileAndSplitSync('./config/base-init.sh').join('\n'));
 
     //  Setup softwares
     const dirPath = './config/nprobe'
-    const scripts = this.getSortedFilesInDirectory(`${dirPath}/scripts`);
+    const scripts = getSortedFilesInDirectory(`${dirPath}/scripts`);
     const initSoftwareElement: ec2.InitElement[] = [];
     scripts.forEach(scriptFile => {
       const remoteScript = `/tmp/${scriptFile}`
-      initSoftwareElement.push(ec2.InitFile.fromString(remoteScript, this.readFileAndSplitSync(`${dirPath}/scripts/${scriptFile}`).join('\n')));
+      initSoftwareElement.push(ec2.InitFile.fromString(remoteScript, readFileAndSplitSync(`${dirPath}/scripts/${scriptFile}`).join('\n')));
       initSoftwareElement.push(ec2.InitCommand.shellCommand(`chmod +x ${remoteScript}`))
       initSoftwareElement.push(ec2.InitCommand.shellCommand(remoteScript, { cwd: '/tmp' }))
     })
@@ -233,7 +255,7 @@ systemctl status codedeploy-agent
       // Update nprobe config
       ec2.InitFile.fromString(
         `/etc/nprobe/nprobe.conf`,
-        this.readFileAndSplitSync(`${dirPath}/nprobe.conf`).join('\n'),
+        readFileAndSplitSync(`${dirPath}/nprobe.conf`).join('\n'),
       ),
       ec2.InitCommand.shellCommand('systemctl restart nprobe.service')
       // Start the server using SystemD
@@ -342,9 +364,9 @@ verbose=true
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
-    commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
-    commandsUserData.addCommands(this.readFileAndSplitSync('./config/nprobe/ntop-preinstall.sh').join('\n'));
-    commandsUserData.addCommands(this.readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n'));
+    commandsUserData.addCommands(readFileAndSplitSync('./config/base-init.sh').join('\n'));
+    commandsUserData.addCommands(readFileAndSplitSync('./config/nprobe/ntop-preinstall.sh').join('\n'));
+    commandsUserData.addCommands(readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n'));
 
     const instance = new ec2.Instance(this, 'bation-host2', {
       vpc: this.vpc,
@@ -406,14 +428,14 @@ WantedBy=multi-user.target`,
           installNprobe: new ec2.InitConfig([
             ec2.InitCommand.shellCommand('echo $HOME'),
             ec2.InitCommand.shellCommand('echo ~/'),
-            ec2.InitFile.fromString('/tmp/nprobe-init.sh', this.readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n')),
+            ec2.InitFile.fromString('/tmp/nprobe-init.sh', readFileAndSplitSync('./config/nprobe/nprobe-init.sh').join('\n')),
             ec2.InitCommand.shellCommand('chmod +x /tmp/nprobe-init.sh'),
             ec2.InitCommand.shellCommand('/tmp/nprobe-init.sh', { cwd: '/tmp' }),
           ]),
           configNprobe: new ec2.InitConfig([
             ec2.InitFile.fromString(
               '/etc/nprobe/nprobe.conf',
-              this.readFileAndSplitSync('./config/nprobe/nprobe.conf').join('\n')
+              readFileAndSplitSync('./config/nprobe/nprobe.conf').join('\n')
             ),
 
           ]),
