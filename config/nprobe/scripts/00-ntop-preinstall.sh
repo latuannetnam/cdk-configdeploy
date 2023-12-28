@@ -22,10 +22,10 @@ fi
 echo "deb [signed-by=/usr/share/keyrings/ntop-archive-keyring.gpg] https://packages.ntop.org/apt-stable/$REL/ $EXTN/" > /etc/apt/sources.list.d/ntop.list
 echo "deb [signed-by=/usr/share/keyrings/ntop-archive-keyring.gpg] https://packages.ntop.org/apt-stable/$REL/ all/" >> /etc/apt/sources.list.d/ntop.list
 #
-if ! test -d  root/.gnupg; then
-    mkdir root/.gnupg
-    chown -R root:root root/.gnupg
-    chmod -R go-rwx root/.gnupg
+if ! test -d  /root/.gnupg; then
+    mkdir /root/.gnupg
+    chown -R root:root /root/.gnupg
+    chmod -R go-rwx /root/.gnupg
 fi
 
 # Export proxies

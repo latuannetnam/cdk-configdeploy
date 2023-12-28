@@ -1,9 +1,7 @@
-apt-get update -y
-apt-get install -y mc htop wget curl net-tools nload nano git
+# Init for bation-host
+yum -y update 
+# Install tools
+yum -y install  mc htop wget curl net-tools nload nano git unzip
 # Install AWS CLI
-apt install -y awscli
-# Install CloudFormation helper script
-apt-get -y install python3-pip
-mkdir -p /opt/aws/
-pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
-ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
+yum install awscli -y
+aws --version

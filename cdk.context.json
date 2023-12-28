@@ -4,5 +4,6 @@
     "ap-east-1b",
     "ap-east-1c"
   ],
-  "ami:account=205147837422:filters.image-type.0=machine:filters.name.0=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207:filters.state.0=available:owners.0=amazon:region=ap-east-1": "ami-0d96ec8a788679eb2"
+  "ami:account=205147837422:filters.image-type.0=machine:filters.name.0=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207:filters.state.0=available:owners.0=amazon:region=ap-east-1": "ami-0d96ec8a788679eb2",
+  "ami:account=205147837422:filters.image-type.0=machine:filters.name.0=CentOS-7-2111-20220825_1.x86_64-d9a3032a-921c-4c6d-b150-bde168105e42:filters.state.0=available:region=ap-east-1": "ami-09f998aa76774295f"
 }

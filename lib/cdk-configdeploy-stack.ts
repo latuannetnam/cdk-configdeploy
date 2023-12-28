@@ -4,7 +4,8 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as path from 'path';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
+import { dir } from 'console';
 
 export class CdkConfigdeployStack extends cdk.Stack {
   // Properties
@@ -46,16 +47,16 @@ export class CdkConfigdeployStack extends cdk.Stack {
       }],
     });
     //  Create key-pair for SSH
-    const keyPair = ec2.KeyPair.fromKeyPairName(this, 'codedeploy-ssh-keypair', this.keyPairName)
+    // const keyPair = ec2.KeyPair.fromKeyPairName(this, 'codedeploy-ssh-keypair', this.keyPairName)
 
-    // Create bastion-host security group
+    // Create bation-host security group
     this.bationHostSecurityGroup = new ec2.SecurityGroup(this, 'public-host-sg', {
       vpc: this.vpc,
       securityGroupName: 'public-host-sg',
       allowAllOutbound: true,
     })
 
-    this.bationHostSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow Internet to SSH to bastion host')
+    this.bationHostSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow Internet to SSH to bation host')
 
     this.machineImage = ec2.MachineImage.lookup({
       name: 'ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207',
@@ -64,8 +65,9 @@ export class CdkConfigdeployStack extends cdk.Stack {
 
     console.log("machineImage:", this.machineImage);
 
+    this.createBationHost(props)
+    // const instance = this.createInstanceCloudFormationInit(props)
     // const instance = this.createInstanceCodeDeploy(props)
-    const instance  = this.createInstanceCloudFormationInit(props)
     // this.createCodeDeploy(props, instance)
 
   }
@@ -76,14 +78,70 @@ export class CdkConfigdeployStack extends cdk.Stack {
     return lines;
   }
 
+  getSortedFilesInDirectory(directory: string): string[] {
+    // Synchronously read the directory
+    let files = readdirSync(directory);
+
+    // Filter out directories and sort the files
+    files = files.filter(file => {
+      return statSync(path.join(directory, file)).isFile();
+    }).sort();
+
+    return files;
+  }
+
+  createBationHost(props?: cdk.StackProps) {
+
+    const bationHostMachineImage = ec2.MachineImage.lookup({
+      name: 'CentOS-7-2111-20220825_1.x86_64-d9a3032a-921c-4c6d-b150-bde168105e42',
+      // owners: ['amazon'],
+    });
+    console.log("bationHostMachineImage:", bationHostMachineImage);
+    // Create bation host
+    const handle = new ec2.InitServiceRestartHandle();
+    // 👇 load user data script
+    const commandsUserData = ec2.UserData.forLinux();
+    commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
+    commandsUserData.addCommands(this.readFileAndSplitSync('./config/bation-host/bation-host-init.sh').join('\n'));
+
+
+
+    const instance = new ec2.Instance(this, 'bation-host', {
+      vpc: this.vpc,
+      // instanceName: 'bation-host',
+      instanceType: new ec2.InstanceType('t3.micro'),
+      machineImage: bationHostMachineImage,
+      availabilityZone: this.vpc.availabilityZones[0],
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      keyName: this.keyPairName,
+      // keyPair: keyPair, Bug: no KeyName in generated template
+      securityGroup: this.bationHostSecurityGroup,
+      userData: commandsUserData,
+      userDataCausesReplacement: false,
+    })
+
+
+    console.log('Instance logical ID:', instance.instance.logicalId)
+    // Add tags to instance
+    cdk.Tags.of(instance).add('group', 'bation-host')
+    
+    // Add the policy to access EC2 without SSH
+    instance.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
+    )
+
+  }
+
+
   createInstanceCodeDeploy(props?: cdk.StackProps) {
 
-    // Create bastion host
+    // Create bation host
     const handle = new ec2.InitServiceRestartHandle();
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
     commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
+    // Install codedeploy
     commandsUserData.addCommands(
       `# Install CodeDeploy agent      
 apt install -y ruby-full
@@ -110,7 +168,7 @@ systemctl status codedeploy-agent
 
     // Add tags to instance
     cdk.Tags.of(instance).add('group', 'bation-host')
-    
+
     const instanceId = instance.instanceId;
     // Install CodeDeploy agent
     // instance.userData.addCommands(`aws ssm send-command --region ${cdk.Stack.of(this).region} --document-name "AWS-ConfigureAWSPackage --instance-ids "${instanceId}" --parameters '{"action":["Install"],"installationType":["In-place update"],"name":["AWSCodeDeployAgent"]}`);
@@ -128,7 +186,7 @@ systemctl status codedeploy-agent
 
     // Allow SSM to install CodeDeployAgent
     // Error: Circular dependency between resources
-    const instanceArn = `arn:aws:ec2:${cdk.Stack.of(this).region}:${cdk.Aws.ACCOUNT_ID}:instance/${instanceId}`;  
+    const instanceArn = `arn:aws:ec2:${cdk.Stack.of(this).region}:${cdk.Aws.ACCOUNT_ID}:instance/${instanceId}`;
     const ssmDocumentArn = `arn:aws:ssm:${cdk.Stack.of(this).region}::document/AWS-ConfigureAWSPackage`
     console.log("instanceArn:", instanceArn)
     // instance.role.attachInlinePolicy(new iam.Policy(this, 'SendCommandPolicy', {
@@ -150,77 +208,114 @@ systemctl status codedeploy-agent
 
   createInstanceCloudFormationInit(props?: cdk.StackProps) {
 
-    // Create bastion host
+    const keyPair = ec2.KeyPair.fromKeyPairName(this, 'codedeploy-ssh-keypair', this.keyPairName)
+    // Create bation host
     const handle = new ec2.InitServiceRestartHandle();
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
     commandsUserData.addCommands(`timedatectl set-timezone ${process.env.TIME_ZONE!}`);
     commandsUserData.addCommands(this.readFileAndSplitSync('./config/base-init.sh').join('\n'));
-    const instance = new ec2.Instance(this, 'bation-host', {
-      vpc: this.vpc,
-      instanceName: 'bation-host',
-      instanceType: new ec2.InstanceType('t3.micro'),
-      machineImage: this.machineImage,
-      availabilityZone: this.vpc.availabilityZones[0],
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      keyName: this.keyPairName,
-      // keyPair: props.keyPair, -> Bug: no KeyName in generated template
-      securityGroup: this.bationHostSecurityGroup,
-      userData: commandsUserData,
-      userDataCausesReplacement: false,
-      init: ec2.CloudFormationInit.fromConfigSets({
-        configSets: {
-          default: ['setupCfnHup',
-          ],
-          Update: [
-            'updateConfig',
-            'testCfnHup'
-          ]
-        },
-        configs: {
-          setupCfnHup: new ec2.InitConfig([
-            ec2.InitFile.fromString('/etc/cfn/cfn-hup.conf',
-              `[main]
+
+    //  Setup softwares
+    const dirPath = './config/nprobe'
+    const scripts = this.getSortedFilesInDirectory(`${dirPath}/scripts`);
+    const initSoftwareElement: ec2.InitElement[] = [];
+    scripts.forEach(scriptFile => {
+      const remoteScript = `/tmp/${scriptFile}`
+      initSoftwareElement.push(ec2.InitFile.fromString(remoteScript, this.readFileAndSplitSync(`${dirPath}/scripts/${scriptFile}`).join('\n')));
+      initSoftwareElement.push(ec2.InitCommand.shellCommand(`chmod +x ${remoteScript}`))
+      initSoftwareElement.push(ec2.InitCommand.shellCommand(remoteScript, { cwd: '/tmp' }))
+    })
+    const setupSoftwares = new ec2.InitConfig(initSoftwareElement)
+
+    // Setup config
+    const updateConfigs = new ec2.InitConfig([
+      // Update nprobe config
+      ec2.InitFile.fromString(
+        `/etc/nprobe/nprobe.conf`,
+        this.readFileAndSplitSync(`${dirPath}/nprobe.conf`).join('\n'),
+      ),
+      ec2.InitCommand.shellCommand('systemctl restart nprobe.service')
+      // Start the server using SystemD
+      // ec2.InitService.enable('nprobe', {
+      //   serviceManager: ec2.ServiceManager.SYSTEMD,
+      //   serviceRestartHandle: handle,
+      // }),
+
+    ])
+
+    const cfnInit = ec2.CloudFormationInit.fromConfigSets({
+      configSets: {
+        default: ['setupCfnHup',
+        ],
+        Update: [
+          'setupSoftwares',
+          'updateConfigs',
+          'testCfnHup'
+        ]
+      },
+      configs: {
+        setupCfnHup: new ec2.InitConfig([
+          ec2.InitFile.fromString('/etc/cfn/cfn-hup.conf',
+            `[main]
 stack=${cdk.Stack.of(this).stackName}
 region=${cdk.Stack.of(this).region}
 interval=1
 verbose=true
 `              ,
-              { serviceRestartHandles: [handle] }
-            ),
-            ec2.InitFile.fromString('/etc/cfn/hooks.d/cfn-auto-reloader.conf',
+            { serviceRestartHandles: [handle] }
+          ),
+          ec2.InitFile.fromString('/etc/cfn/hooks.d/cfn-auto-reloader.conf',
 
-              ` Content will be updated later
-                `
-              ,
-              { serviceRestartHandles: [handle] }
-            ),
-            ec2.InitService.systemdConfigFile('cfn-hup', {
-              command: '/usr/local/bin/cfn-hup',
-              description: 'cfn-hup daemon'
+            ` Content will be updated later
+              `
+            ,
+            { serviceRestartHandles: [handle] }
+          ),
+          ec2.InitService.systemdConfigFile('cfn-hup', {
+            command: '/usr/local/bin/cfn-hup',
+            description: 'cfn-hup daemon'
 
-            }),
-            // Start the server using SystemD
-            ec2.InitService.enable('cfn-hup', {
-              serviceManager: ec2.ServiceManager.SYSTEMD,
-            }),
-          ]),
-          updateConfig: new ec2.InitConfig([
-            ec2.InitCommand.shellCommand('echo Hello world')
-          ]),
-          testCfnHup: new ec2.InitConfig([
-            ec2.InitCommand.shellCommand('echo "+*+*+*+CFN-HUP+*+*+*+Working Well++++++"'),
-          ]),
-        },
-      }),
+          }),
+          // Start the server using SystemD
+          ec2.InitService.enable('cfn-hup', {
+            serviceManager: ec2.ServiceManager.SYSTEMD,
+            serviceRestartHandle: handle,
+          }),
+        ]),
+        // Install software
+        setupSoftwares: setupSoftwares,
+        // update software Configuration
+        updateConfigs: updateConfigs,
+        testCfnHup: new ec2.InitConfig([
+          ec2.InitCommand.shellCommand('echo "+*+*+*+CFN-HUP+*+*+*+Working Well++++++"'),
+        ]),
+      },
+    })
+
+    const instance = new ec2.Instance(this, 'bation-host', {
+      vpc: this.vpc,
+      // instanceName: 'bation-host',
+      instanceType: new ec2.InstanceType('t3.micro'),
+      machineImage: this.machineImage,
+      availabilityZone: this.vpc.availabilityZones[0],
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      keyName: this.keyPairName,
+      // keyPair: keyPair, Bug: no KeyName in generated template
+      securityGroup: this.bationHostSecurityGroup,
+      userData: commandsUserData,
+      userDataCausesReplacement: false,
+      init: cfnInit,
       initOptions: {
-        configSets: ['default'],
-        timeout: cdk.Duration.minutes(5),
+        configSets: ['default', 'Update'],
+        timeout: cdk.Duration.minutes(15),
       },
     })
 
 
     console.log('Instance logical ID:', instance.instance.logicalId)
+    // Add tags to instance
+    cdk.Tags.of(instance).add('group', 'bation-host')
 
     // Workaround to overrid instance logical ID in CloudFormation Init
     // https://github.com/aws/aws-cdk/issues/14855
@@ -242,7 +337,7 @@ verbose=true
 
   createInstanceCloudFormationInit2(props?: cdk.StackProps) {
 
-    // Create bastion host
+    // Create bation host
     const handle = new ec2.InitServiceRestartHandle();
     // 👇 load user data script
     const commandsUserData = ec2.UserData.forLinux();
@@ -394,7 +489,7 @@ WantedBy=multi-user.target`,
     });
 
     deploymentGroup.node.addDependency(instance!)
-    
+
   }
 
 
