@@ -55,6 +55,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
       allowAllOutbound: true,
     })
 
+    this.bationHostSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.allIcmp(), 'Allow ICMP from any')
     this.bationHostSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow Internet to SSH to bation host')
 
     this.machineImage = ec2.MachineImage.lookup({
@@ -64,8 +65,8 @@ export class CdkConfigdeployStack extends cdk.Stack {
 
     console.log("machineImage:", this.machineImage);
 
-    this.createBationHost(props)
-    // const instance = this.createEC2Instance(props)
+    // this.createBationHost(props)
+    const instance = this.createEC2Instance(props)
     // const instance = this.createInstanceCloudFormationInit(props)
     // const instance = this.createInstanceCodeDeploy(props)
     // this.createCodeDeploy(props, instance)
@@ -96,7 +97,8 @@ export class CdkConfigdeployStack extends cdk.Stack {
       ),
       ec2.InitCommand.shellCommand('systemctl restart nprobe.service')
     ])
-    const instance = new EC2InstanceExt(this, 'ec2-instance', {
+    
+    /*const instance = new EC2InstanceExt(this, 'ec2-instance', {
       region: this.region,
       vpc: this.vpc,
       // instanceName: 'bation-host',
@@ -109,7 +111,33 @@ export class CdkConfigdeployStack extends cdk.Stack {
       securityGroup: this.bationHostSecurityGroup,
       setupSoftwares: setupSoftwares,
       updateConfigs: updateConfigs,
-    })
+    })*/
+
+    const { instance } = new EC2InstanceExt(this, 'ec2-instance', {
+      region: this.region,
+      vpc: this.vpc,
+      // instanceName: nprobeHostName,
+      instanceType: new ec2.InstanceType(process.env.NPROBE_INSTANCE_TYPE!),
+      machineImage: this.machineImage,
+      availabilityZone: this.vpc.availabilityZones[0],
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      keyName: this.keyPairName,
+      // keyPair: keyPair, Bug: no KeyName in generated template
+      securityGroup: this.bationHostSecurityGroup,
+      setupSoftwares: setupSoftwares,
+      updateConfigs: updateConfigs,
+      blockDevices: [
+          {
+              deviceName: '/dev/sda1',  // Root volume
+              volume: ec2.BlockDeviceVolume.ebs(parseInt(process.env.NPROBE_ROOT_VOLUME_SIZE!), {volumeType: ec2.EbsDeviceVolumeType.GP3}),
+              
+          },
+          // {
+          //   deviceName: '/dev/sdb',  // Additional volume
+          //   volume: ec2.BlockDeviceVolume.ebs(parseInt(process.env.CLICKHOUSE_DATA_VOLUME_SIZE!)),
+          // },
+      ],
+  })
   }
 
   createBationHost(props?: cdk.StackProps) {

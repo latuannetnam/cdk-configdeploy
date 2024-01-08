@@ -1,1 +1,1 @@
-cdk deploy -c profile=netnamaws --profile netnamaws -v --no-rollback
+cdk deploy -c profile=netnamaws --profile netnamaws-tuanla -v --no-rollback

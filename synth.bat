@@ -1,1 +1,1 @@
-cdk synth -c profile=netnamaws --profile netnamaws
+cdk synth -c profile=netnamaws --profile netnamaws-tuanla

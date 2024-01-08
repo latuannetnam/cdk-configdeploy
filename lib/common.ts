@@ -1,8 +1,48 @@
+import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import * as path from 'path';
+import * as fs from 'fs';
+export interface IPPrefix {
+    prefix: string;
+}
 
-export interface CloudFormationInitProps {
+export interface BaseResourcesProps extends cdk.NestedStackProps {
+    region: string
+    vpc: ec2.Vpc
+    machineImage: ec2.IMachineImage
+    keyPair: ec2.IKeyPair
+}    
+
+
+  export function readIPPrefixesFromFile(filePath: string): IPPrefix[] {
+    try {
+      const fileContents = fs.readFileSync(filePath, 'utf-8');
+      const lines = fileContents.split('\n');
+  
+      const ipPrefixes: IPPrefix[] = [];
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine) {
+          // Validate IP prefix format (replace with a more robust validation if needed)
+          if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(trimmedLine)) {
+            ipPrefixes.push({ prefix: trimmedLine });
+          } else {
+            console.warn(`Invalid IP prefix format: ${trimmedLine}`);
+          }
+        }
+      }
+  
+      return ipPrefixes;
+    } catch (error) {
+      console.error(`Error reading IP prefixes from file: ${(error as any).message}`);
+      throw error;
+    }
+  }
+  
+
+  export interface CloudFormationInitProps {
     stackName: string
     region: string
     setupSoftwares?: ec2.InitConfig
@@ -80,4 +120,4 @@ export function createBaseCloudFormationInit(props: CloudFormationInitProps): ec
       })
     
     return cfnInit  
-}
+}  

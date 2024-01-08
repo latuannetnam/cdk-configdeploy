@@ -1,1 +1,1 @@
-cdk diff -c profile=netnamaws --profile netnamaws
+cdk diff -c profile=netnamaws --profile netnamaws-tuanla
