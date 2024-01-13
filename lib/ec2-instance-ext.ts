@@ -72,7 +72,8 @@ export class EC2InstanceExt extends Construct {
             userDataCausesReplacement: false,
             init: cfnInit,
             initOptions: {
-                configSets: ['default', 'Update'],
+                configSets: ['default'],
+                embedFingerprint:false,
                 timeout: cdk.Duration.minutes(15),
             },
         });
