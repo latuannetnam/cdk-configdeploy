@@ -11,6 +11,11 @@ apt-get -y install  mc htop wget curl net-tools nload nano git
 apt-get -y install snmp snmpd snmp-mibs-downloader libnet-snmp-perl snmptrapd
 systemctl enable snmpd
 
+echo "Install ansible"
+apt-add-repository ppa:ansible/ansible -y
+apt-get update -y
+apt -y install ansible 
+
 echo "Installing AWS CLI"
 apt install -y awscli
 

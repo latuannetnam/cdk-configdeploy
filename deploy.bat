@@ -1,1 +1,1 @@
-cdk deploy -c profile=netnamaws --profile netnamaws-tuanla -v --no-rollback
+npx cdk deploy -c env_id=netnamaws --profile netnamaws-tuanla  --no-rollback

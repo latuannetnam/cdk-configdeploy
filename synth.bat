@@ -1,1 +1,1 @@
-cdk synth -c profile=netnamaws --profile netnamaws-tuanla
+npx cdk synth -c env_id=netnamaws --profile netnamaws-tuanla

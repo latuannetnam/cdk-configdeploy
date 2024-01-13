@@ -95,7 +95,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
         `/etc/nprobe/nprobe.conf`,
         readFileAndSplitSync(`${dirPath}/nprobe.conf`).join('\n'),
       ),
-      ec2.InitCommand.shellCommand('systemctl restart nprobe.service')
+      // ec2.InitCommand.shellCommand('systemctl restart nprobe.service')
     ])
     
     /*const instance = new EC2InstanceExt(this, 'ec2-instance', {
@@ -129,7 +129,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
       blockDevices: [
           {
               deviceName: '/dev/sda1',  // Root volume
-              volume: ec2.BlockDeviceVolume.ebs(parseInt(process.env.NPROBE_ROOT_VOLUME_SIZE!), {volumeType: ec2.EbsDeviceVolumeType.GP3}),
+              volume: ec2.BlockDeviceVolume.ebs(8, {volumeType: ec2.EbsDeviceVolumeType.GP3}),
               
           },
           // {

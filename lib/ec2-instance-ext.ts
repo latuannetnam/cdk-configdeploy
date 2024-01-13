@@ -37,25 +37,25 @@ export class EC2InstanceExt extends Construct {
         let updateConfigs = props.updateConfigs
         if (updateConfigs) {
             // Turn on instance terminal protection
-            const terminalProtectionCommandContent =readFileAndSplitSync(`./config/modify-instance.sh`).join('\n')
-            const terminalProtectionCommand = '/tmp/modify-instance.sh'
-            updateConfigs.add(
-                ec2.InitFile.fromString(terminalProtectionCommand, terminalProtectionCommandContent.replace(/REGION_ID/,cdk.Stack.of(this).region)))
-            updateConfigs.add(ec2.InitCommand.shellCommand(`chmod +x ${terminalProtectionCommand}`))    
-            updateConfigs.add(ec2.InitCommand.shellCommand(`${terminalProtectionCommand}`))
+            // const terminalProtectionCommandContent =readFileAndSplitSync(`./config/modify-instance.sh`).join('\n')
+            // const terminalProtectionCommand = '/tmp/modify-instance.sh'
+            // updateConfigs.add(
+            //     ec2.InitFile.fromString(terminalProtectionCommand, terminalProtectionCommandContent.replace(/REGION_ID/,cdk.Stack.of(this).region)))
+            // updateConfigs.add(ec2.InitCommand.shellCommand(`chmod +x ${terminalProtectionCommand}`))    
+            // updateConfigs.add(ec2.InitCommand.shellCommand(`${terminalProtectionCommand}`))
 
-            const snmpdConf = readFileAndSplitSync(`./config/snmpd.conf`).join('\n')
-            const cwAgentConf = readFileAndSplitSync(`./config/file_amazon-cloudwatch-agent.json`).join('\n')
+            // const snmpdConf = readFileAndSplitSync(`./config/snmpd.conf`).join('\n')
+            // const cwAgentConf = readFileAndSplitSync(`./config/file_amazon-cloudwatch-agent.json`).join('\n')
 
-            // SNMP
-            updateConfigs.add(
-                ec2.InitFile.fromString('/etc/snmp/snmpd.conf', snmpdConf))
-            updateConfigs.add(ec2.InitCommand.shellCommand('systemctl restart snmpd'))
+            // // SNMP
+            // updateConfigs.add(
+            //     ec2.InitFile.fromString('/etc/snmp/snmpd.conf', snmpdConf))
+            // updateConfigs.add(ec2.InitCommand.shellCommand('systemctl restart snmpd'))
 
-            // CWAgent
-            updateConfigs.add(
-                ec2.InitFile.fromString('/tmp/file_amazon-cloudwatch-agent.json', cwAgentConf))
-            updateConfigs.add(ec2.InitCommand.shellCommand('/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -s -m ec2 -c file:/tmp/file_amazon-cloudwatch-agent.json'))
+            // // CWAgent
+            // updateConfigs.add(
+            //     ec2.InitFile.fromString('/tmp/file_amazon-cloudwatch-agent.json', cwAgentConf))
+            // updateConfigs.add(ec2.InitCommand.shellCommand('/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -s -m ec2 -c file:/tmp/file_amazon-cloudwatch-agent.json'))
         }
         
         const cfnInit = createBaseCloudFormationInit({
@@ -78,7 +78,7 @@ export class EC2InstanceExt extends Construct {
         });
 
         // Apply RemovalPolicy
-        this.instance.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
+        // this.instance.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
 
         // Workaround to override instance logical ID in CloudFormation Init
         // https://github.com/aws/aws-cdk/issues/14855

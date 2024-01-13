@@ -1,1 +1,1 @@
-cdk diff -c profile=netnamaws --profile netnamaws-tuanla
+npx cdk diff -c env_id=netnamaws --profile netnamaws-tuanla

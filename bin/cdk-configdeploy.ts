@@ -8,7 +8,7 @@ import * as dotenv from 'dotenv';
 
 const app = new cdk.App();
 // Load variable from .env file
-const profile = app.node.tryGetContext('profile');
+const profile = app.node.tryGetContext('env_id');
 dotenv.config({ path: profile ? `.env.${profile}` : undefined });
 // const regionInfo = region_info.RegionInfo.get('name');
 
