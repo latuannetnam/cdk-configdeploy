@@ -11,6 +11,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
   vpc: ec2.Vpc
   bationHostSecurityGroup: ec2.SecurityGroup
   keyPairName: string
+  keyPair: ec2.IKeyPair
   machineImage: ec2.IMachineImage
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -46,7 +47,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
       }],
     });
     //  Create key-pair for SSH
-    // const keyPair = ec2.KeyPair.fromKeyPairName(this, 'codedeploy-ssh-keypair', this.keyPairName)
+    this.keyPair = ec2.KeyPair.fromKeyPairName(this, 'codedeploy-ssh-keypair', this.keyPairName)
 
     // Create bation-host security group
     this.bationHostSecurityGroup = new ec2.SecurityGroup(this, 'public-host-sg', {
@@ -122,7 +123,8 @@ export class CdkConfigdeployStack extends cdk.Stack {
       availabilityZone: this.vpc.availabilityZones[0],
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       keyName: this.keyPairName,
-      // keyPair: keyPair, Bug: no KeyName in generated template
+      // , Bug: no KeyName in generated template
+      // keyPair: this.keyPair,
       securityGroup: this.bationHostSecurityGroup,
       setupSoftwares: setupSoftwares,
       updateConfigs: updateConfigs,

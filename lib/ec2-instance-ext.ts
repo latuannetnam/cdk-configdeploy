@@ -74,6 +74,7 @@ export class EC2InstanceExt extends Construct {
             initOptions: {
                 configSets: ['default'],
                 embedFingerprint:false,
+                ignoreFailures: true,
                 timeout: cdk.Duration.minutes(15),
             },
         });
@@ -83,14 +84,23 @@ export class EC2InstanceExt extends Construct {
 
         // Workaround to override instance logical ID in CloudFormation Init
         // https://github.com/aws/aws-cdk/issues/14855
-        const cfnHubReload =
-            `[cfn-auto-reloader-hook]
+        const cfnHookSetupSoftware =
+            `[cfn-setup-softwares-hook]
 triggers=post.update
 path=Resources.${this.instance.instance.logicalId}.Metadata.AWS::CloudFormation::Init
-action=/usr/local/bin/cfn-init -v --stack ${cdk.Stack.of(this).stackName} --resource ${this.instance.instance.logicalId} --region ${cdk.Stack.of(this).region}  --configsets Update
+action=/usr/local/bin/cfn-init -v --stack ${cdk.Stack.of(this).stackName} --resource ${this.instance.instance.logicalId} --region ${cdk.Stack.of(this).region}  --configsets setupSoftwares
 `
-        this.instance.instance.addOverride('Metadata.AWS::CloudFormation::Init.setupCfnHup.files./etc/cfn/hooks\\.d/cfn-auto-reloader\\.conf.content',
-            cfnHubReload)
+        this.instance.instance.addOverride('Metadata.AWS::CloudFormation::Init.setupCfnHup.files./etc/cfn/hooks\\.d/cfn-setup-softwares\\.conf.content',
+        cfnHookSetupSoftware)
+
+        const cfnHookUpdateConfig =
+        `[cfn-update-config-hook]
+triggers=post.update
+path=Resources.${this.instance.instance.logicalId}.Metadata.AWS::CloudFormation::Init
+action=/usr/local/bin/cfn-init -v --stack ${cdk.Stack.of(this).stackName} --resource ${this.instance.instance.logicalId} --region ${cdk.Stack.of(this).region}  --configsets UpdateConfigs
+`
+    this.instance.instance.addOverride('Metadata.AWS::CloudFormation::Init.setupCfnHup.files./etc/cfn/hooks\\.d/cfn-update-configs\\.conf.content',
+    cfnHookUpdateConfig) 
 
         // Add the policy to access EC2 without SSH
         this.instance.role.addManagedPolicy(

@@ -74,8 +74,11 @@ export function createBaseCloudFormationInit(props: CloudFormationInitProps): ec
         configSets: {
           default: ['setupCfnHup',
           ],
-          Update: [
+          setupSoftwares: [
             'setupSoftwares',
+            'testCfnHup'
+          ],
+          UpdateConfigs: [
             'updateConfigs',
             'testCfnHup'
           ]
@@ -91,13 +94,21 @@ export function createBaseCloudFormationInit(props: CloudFormationInitProps): ec
   `              ,
               { serviceRestartHandles: [handle] }
             ),
-            ec2.InitFile.fromString('/etc/cfn/hooks.d/cfn-auto-reloader.conf',
+            ec2.InitFile.fromString('/etc/cfn/hooks.d/cfn-setup-softwares.conf',
   
               ` Content will be updated later
                 `
               ,
               { serviceRestartHandles: [handle] }
             ),
+            ec2.InitFile.fromString('/etc/cfn/hooks.d/cfn-update-configs.conf',
+  
+              ` Content will be updated later
+                `
+              ,
+              { serviceRestartHandles: [handle] }
+            ),
+            
             ec2.InitService.systemdConfigFile('cfn-hup', {
               command: '/usr/local/bin/cfn-hup',
               description: 'cfn-hup daemon'
