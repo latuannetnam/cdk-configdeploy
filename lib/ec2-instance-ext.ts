@@ -80,6 +80,9 @@ export class EC2InstanceExt extends Construct {
             },
         });
 
+        // 
+        cdk.Tags.of(this.instance).add('service-group', process.env.STACK_NAME!)
+
         // Apply RemovalPolicy
         // this.instance.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
 

@@ -133,7 +133,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
               deviceName: '/dev/sda1',  // Root volume
               volume: ec2.BlockDeviceVolume.ebs(8, {
                 deleteOnTermination: true,
-                volumeType: ec2.EbsDeviceVolumeType.GP3
+                volumeType: ec2.EbsDeviceVolumeType.GP2
               }),
               
           },
