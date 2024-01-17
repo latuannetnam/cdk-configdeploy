@@ -68,6 +68,7 @@ export class EC2InstanceExt extends Construct {
 
         this.instance = new ec2.Instance(this, id, {
             ...props,
+            propagateTagsToVolumeOnCreation: true,
             userData: commandsUserData,
             userDataCausesReplacement: false,
             init: cfnInit,

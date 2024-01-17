@@ -17,7 +17,7 @@ export class CdkConfigdeployStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
     // Create VPC
-    this.vpc = new ec2.Vpc(this, 'monitoring-vpc', {
+    this.vpc = new ec2.Vpc(this, 'configdeploy-vpc', {
       ipAddresses: ec2.IpAddresses.cidr(process.env.VPC_CIDR!),
       natGateways: 0,
       maxAzs: parseInt(process.env.MAX_AZS!),
@@ -131,7 +131,10 @@ export class CdkConfigdeployStack extends cdk.Stack {
       blockDevices: [
           {
               deviceName: '/dev/sda1',  // Root volume
-              volume: ec2.BlockDeviceVolume.ebs(8, {volumeType: ec2.EbsDeviceVolumeType.GP3}),
+              volume: ec2.BlockDeviceVolume.ebs(8, {
+                deleteOnTermination: true,
+                volumeType: ec2.EbsDeviceVolumeType.GP3
+              }),
               
           },
           // {
@@ -140,6 +143,15 @@ export class CdkConfigdeployStack extends cdk.Stack {
           // },
       ],
   })
+    cdk.Tags.of(instance).add('group', 'configdeploy')
+
+    if (instance.instance.volumes){
+        const volumes =  instance.instance.volumes as ec2.CfnInstance.VolumeProperty[];
+        const volumeProperty = volumes[0]
+        console.log("volumeProperty:", volumeProperty);
+        
+        // volumes[0].addTag('Name', 'MyVolume');
+    }
   }
 
   createBationHost(props?: cdk.StackProps) {
